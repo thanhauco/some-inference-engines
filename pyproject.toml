@@ -19,6 +19,9 @@ vllm = ["vllm"]
 sglang = ["sglang[all]"]
 tensorrt-llm = ["tensorrt-llm"]
 
+[project.scripts]
+ie = "inference_engines.cli:main"
+
 [tool.hatch.build.targets.wheel]
 packages = ["src/inference_engines"]
 
