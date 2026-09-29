@@ -1,0 +1,101 @@
+# One file, four engines, one profile each. All expose the OpenAI API:
+#
+#   docker compose -f deploy/docker-compose.yml --profile ollama up -d        # :11434
+#   docker compose -f deploy/docker-compose.yml --profile vllm up -d          # :8000
+#   docker compose -f deploy/docker-compose.yml --profile sglang up -d        # :30000
+#   docker compose -f deploy/docker-compose.yml --profile tensorrt-llm up -d  # :8001
+#
+# GPU engines need the NVIDIA Container Toolkit. Running two GPU engines at once on one
+# GPU will not fit - each claims most of the VRAM for its KV cache.
+
+x-gpu: &gpu
+  deploy:
+    resources:
+      reservations:
+        devices:
+          - driver: nvidia
+            count: all
+            capabilities: [gpu]
+
+x-hf-cache: &hf-cache
+  - ${HF_HOME:-~/.cache/huggingface}:/root/.cache/huggingface
+
+services:
+  ollama:
+    profiles: [ollama]
+    image: ollama/ollama:latest
+    ports: ["11434:11434"]
+    volumes: [ollama:/root/.ollama]
+    healthcheck:
+      test: ["CMD", "ollama", "list"]
+      interval: 10s
+    # GPU is optional for Ollama; uncomment to use it.
+    # <<: *gpu
+
+  ollama-pull:
+    profiles: [ollama]
+    image: ollama/ollama:latest
+    depends_on:
+      ollama: { condition: service_healthy }
+    environment:
+      - OLLAMA_HOST=ollama:11434
+    entrypoint: ["ollama", "pull", "${OLLAMA_MODEL:-llama3.1:8b}"]
+    restart: "no"
+
+  vllm:
+    profiles: [vllm]
+    image: vllm/vllm-openai:${VLLM_TAG:-latest}
+    <<: *gpu
+    ipc: host
+    ports: ["8000:8000"]
+    environment:
+      - HF_TOKEN=${HF_TOKEN:-}
+    volumes: *hf-cache
+    command: >
+      --model ${MODEL:-meta-llama/Llama-3.1-8B-Instruct}
+      --host 0.0.0.0 --port 8000
+      --gpu-memory-utilization 0.90 --max-model-len 16384
+      --enable-prefix-caching
+    healthcheck:
+      test: ["CMD", "curl", "-fs", "http://localhost:8000/health"]
+      interval: 15s
+      start_period: 300s
+
+  sglang:
+    profiles: [sglang]
+    image: lmsysorg/sglang:${SGLANG_TAG:-latest}
+    <<: *gpu
+    ipc: host
+    ports: ["30000:30000"]
+    environment:
+      - HF_TOKEN=${HF_TOKEN:-}
+    volumes: *hf-cache
+    command: >
+      python3 -m sglang.launch_server
+      --model-path ${MODEL:-meta-llama/Llama-3.1-8B-Instruct}
+      --host 0.0.0.0 --port 30000 --mem-fraction-static 0.85
+    healthcheck:
+      test: ["CMD", "curl", "-fs", "http://localhost:30000/health"]
+      interval: 15s
+      start_period: 300s
+
+  tensorrt-llm:
+    profiles: [tensorrt-llm]
+    image: nvcr.io/nvidia/tensorrt-llm/release:${TRTLLM_TAG:-latest}
+    <<: *gpu
+    ipc: host
+    ulimits: { memlock: -1, stack: 67108864 }
+    ports: ["8001:8001"]
+    environment:
+      - HF_TOKEN=${HF_TOKEN:-}
+    volumes: *hf-cache
+    command: >
+      trtllm-serve ${MODEL:-meta-llama/Llama-3.1-8B-Instruct}
+      --host 0.0.0.0 --port 8001 --max_batch_size 128
+    healthcheck:
+      test: ["CMD", "curl", "-fs", "http://localhost:8001/health"]
+      interval: 15s
+      start_period: 600s
+
+volumes:
+  ollama:

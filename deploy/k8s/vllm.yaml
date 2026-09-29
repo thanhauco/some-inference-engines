@@ -1,0 +1,54 @@
+# Production-shaped vLLM on Kubernetes: one GPU per replica, scale replicas for traffic.
+# kubectl create secret generic hf-token --from-literal=token=$HF_TOKEN
+# kubectl apply -f deploy/k8s/vllm.yaml
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: vllm-llama-8b
+  labels: { app: vllm-llama-8b }
+spec:
+  replicas: 2
+  selector:
+    matchLabels: { app: vllm-llama-8b }
+  template:
+    metadata:
+      labels: { app: vllm-llama-8b }
+    spec:
+      containers:
+        - name: vllm
+          image: vllm/vllm-openai:latest  # pin a version in production
+          args:
+            - --model=meta-llama/Llama-3.1-8B-Instruct
+            - --port=8000
+            - --gpu-memory-utilization=0.90
+            - --max-model-len=16384
+            - --enable-prefix-caching
+          env:
+            - name: HF_TOKEN
+              valueFrom: { secretKeyRef: { name: hf-token, key: token } }
+          ports: [{ containerPort: 8000, name: http }]
+          resources:
+            limits: { nvidia.com/gpu: 1 }
+          readinessProbe:
+            httpGet: { path: /health, port: http }
+            periodSeconds: 10
+          startupProbe:  # weight download + CUDA graph capture can take minutes
+            httpGet: { path: /health, port: http }
+            failureThreshold: 60
+            periodSeconds: 10
+          volumeMounts:
+            - { name: shm, mountPath: /dev/shm }
+            - { name: hf-cache, mountPath: /root/.cache/huggingface }
+      volumes:
+        - name: shm
+          emptyDir: { medium: Memory, sizeLimit: 8Gi }
+        - name: hf-cache
+          emptyDir: {}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: vllm-llama-8b
+spec:
+  selector: { app: vllm-llama-8b }
+  ports: [{ port: 80, targetPort: http, name: http }]
