@@ -72,7 +72,16 @@ def launch_command(
     kv_cache_free_gpu_memory_fraction: float | None = None,
 ) -> list[str]:
     """``trtllm-serve``: OpenAI-compatible server over a HF model or a prebuilt engine dir."""
-    cmd = ["trtllm-serve", model, "--host", "0.0.0.0", "--port", str(port), "--tp_size", str(tp_size)]
+    cmd = [
+        "trtllm-serve",
+        model,
+        "--host",
+        "0.0.0.0",
+        "--port",
+        str(port),
+        "--tp_size",
+        str(tp_size),
+    ]
     if max_batch_size:
         cmd += ["--max_batch_size", str(max_batch_size)]
     if kv_cache_free_gpu_memory_fraction is not None:

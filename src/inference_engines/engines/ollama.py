@@ -57,7 +57,9 @@ class OllamaNative:
         transport: httpx.BaseTransport | None = None,
     ) -> None:
         self.profile = profile or get_profile(Engine.OLLAMA)
-        self._http = httpx.Client(base_url=self.profile.root_url, timeout=timeout, transport=transport)
+        self._http = httpx.Client(
+            base_url=self.profile.root_url, timeout=timeout, transport=transport
+        )
 
     def close(self) -> None:
         self._http.close()
