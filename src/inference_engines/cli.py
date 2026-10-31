@@ -260,6 +260,51 @@ def _sim_memory() -> None:
     _print_table(rows)
 
 
+def _sim_interference() -> None:
+    from .concepts.prefill_decode import compare
+
+    print("32 sequences streaming while six 32k-token prompts arrive, one per second:\n")
+    _print_table([r.row() for r in compare()])
+
+
+def _sim_routing() -> None:
+    from .concepts.routing import compare_policies
+
+    print("16 agents x 24 requests across 4 replicas (4k-token KV cache each):\n")
+    _print_table([r.row() for r in compare_policies()])
+
+
+def _sim_parallelism() -> None:
+    from .concepts.parallelism import ETHERNET, NVLINK, plan_layouts
+
+    for model, link in (("llama-3.1-8b", NVLINK), ("llama-3.1-8b", ETHERNET),
+                        ("llama-3.1-70b", NVLINK)):  # fmt: skip
+        print(f"\n{model} on 4 x 80 GiB GPUs, {link.name}, batch 32 per replica:")
+        _print_table([p.row() for p in plan_layouts(model, gpus=4, link=link)])
+
+
+def _sim_offload() -> None:
+    from .concepts.offload import cold_start_s, offload_curve, recommend_quant
+
+    print("Llama 3.1 8B q4_K_M, 4k context, layers that fit on the GPU:\n")
+    _print_table([p.row() for p in offload_curve()])
+    for vram in (6, 8, 16):
+        best = recommend_quant("llama-3.1-8b", vram)
+        print(f"\n{vram:>2} GiB VRAM -> use {best.quant} ({best.tokens_per_s:.0f} tok/s)", end="")
+    print(f"\n\ncold start from NVMe: {cold_start_s('llama-3.1-8b'):.1f} s")
+
+
+def _sim_capacity() -> None:
+    from .concepts.capacity import EXAMPLE_MEASUREMENTS, breakeven_months, compare_options
+
+    plans = compare_options(EXAMPLE_MEASUREMENTS, peak_tok_per_s=50_000)
+    print("Peak 50k output tok/s, $2.50/GPU-hour, 70% target utilization")
+    print("(placeholder throughputs - plug in your own `ie bench` results):\n")
+    _print_table([p.row() for p in plans])
+    months = breakeven_months(60_000, plans[0], plans[-1])
+    print(f"\na $60k migration from the first to the last option pays back in {months:.1f} months")
+
+
 SIMULATIONS: dict[str, Callable[[], None]] = {
     "batching": _sim_batching,
     "paged": _sim_paged,
@@ -270,6 +315,11 @@ SIMULATIONS: dict[str, Callable[[], None]] = {
     "quantization": _sim_quantization,
     "fusion": _sim_fusion,
     "memory": _sim_memory,
+    "interference": _sim_interference,
+    "routing": _sim_routing,
+    "parallelism": _sim_parallelism,
+    "offload": _sim_offload,
+    "capacity": _sim_capacity,
 }
 
 
