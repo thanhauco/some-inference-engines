@@ -1,0 +1,74 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Inference engines in motion</title>
+<style>
+  :root { color-scheme: dark; }
+  html, body { margin: 0; background: #060912; color: #E8EEF9; font: 15px/1.4 Inter, system-ui, sans-serif; }
+  main { max-width: 1280px; margin: 0 auto; padding: 16px; }
+  canvas { display: block; width: 100%; height: auto; border-radius: 12px; background: #0A0F1C; }
+  .bar { display: flex; gap: 10px; align-items: center; padding: 12px 0; flex-wrap: wrap; }
+  button, select { background: #16223B; color: inherit; border: 1px solid #26344F; border-radius: 8px;
+    padding: 8px 14px; font: inherit; cursor: pointer; }
+  button:hover, select:hover { border-color: #4C8DFF; }
+  input[type=range] { flex: 1; min-width: 160px; accent-color: #4C8DFF; }
+  .time { font-variant-numeric: tabular-nums; color: #8EA0BF; min-width: 92px; text-align: right; }
+  body.headless main { padding: 0; max-width: none; }
+  body.headless .bar { display: none; }
+  body.headless canvas { width: 1280px; height: 720px; border-radius: 0; }
+</style>
+</head>
+<body>
+<main>
+  <canvas id="stage" width="1280" height="720"></canvas>
+  <div class="bar">
+    <select id="pick" aria-label="Video"></select>
+    <button id="play" type="button">Pause</button>
+    <input id="scrub" type="range" min="0" max="1" step="0.001" value="0" aria-label="Seek">
+    <span class="time" id="time"></span>
+  </div>
+</main>
+<script src="src/data.js"></script>
+<script src="src/kit.js"></script>
+<script src="src/vllm.js"></script>
+<script src="src/sglang.js"></script>
+<script src="src/tensorrt_llm.js"></script>
+<script src="src/ollama.js"></script>
+<script src="src/overview.js"></script>
+<script>
+  const canvas = document.getElementById("stage"), ctx = canvas.getContext("2d");
+  const params = new URLSearchParams(location.search);
+  const pick = document.getElementById("pick"), scrub = document.getElementById("scrub");
+  const playBtn = document.getElementById("play"), timeEl = document.getElementById("time");
+  if (params.has("headless")) document.body.classList.add("headless");
+
+  // Used by videos/render.js: draw one exact frame.
+  window.renderAt = (id, t) => K.drawFrame(ctx, VIDEOS[id], t);
+  window.videoInfo = () => Object.values(VIDEOS).map((v) => ({
+    id: v.id, title: v.title, duration: K.duration(v), scenes: v.scenes.map((s) => s.dur),
+  }));
+
+  for (const v of Object.values(VIDEOS)) pick.add(new Option(v.title, v.id));
+  let id = params.get("v") in VIDEOS ? params.get("v") : pick.options[0].value;
+  pick.value = id;
+  let T = 0, playing = !params.has("headless"), last = performance.now();
+  const total = () => K.duration(VIDEOS[id]);
+  const stamp = (s) => `${Math.floor(s / 60)}:${String(Math.floor(s % 60)).padStart(2, "0")}`;
+
+  function frame(now) {
+    if (playing) T = (T + (now - last) / 1000) % total();
+    last = now;
+    K.drawFrame(ctx, VIDEOS[id], T);
+    scrub.value = T / total();
+    timeEl.textContent = `${stamp(T)} / ${stamp(total())}`;
+    requestAnimationFrame(frame);
+  }
+  pick.onchange = () => { id = pick.value; T = 0; };
+  playBtn.onclick = () => { playing = !playing; playBtn.textContent = playing ? "Pause" : "Play"; };
+  scrub.oninput = () => { T = scrub.value * total(); };
+  document.fonts.ready.then(() => { if (!params.has("headless")) requestAnimationFrame(frame); window.READY = true; });
+</script>
+</body>
+</html>
