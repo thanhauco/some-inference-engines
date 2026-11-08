@@ -92,7 +92,7 @@
       text(ctx, `fully on GPU: ${max} tok/s`, 950, 540, { size: 15, color: C.dim, align: "right" });
       text(ctx, "illustrative model: 0.5 ms per layer on GPU, 4 ms on CPU", 330, 572, { size: 14, color: C.faint });
       if (onGpu === 32) text(ctx, "fits entirely ✓", 1220, 500, { size: 22, weight: 700, color: C.ok, align: "right" });
-      else text(ctx, `${32 - onGpu} layers spill`, 1220, 500, { size: 22, weight: 700, color: C.amber, align: "right" });
+      else text(ctx, `${32 - onGpu} layer${32 - onGpu === 1 ? "" : "s"} on CPU`, 1220, 500, { size: 22, weight: 700, color: C.amber, align: "right" });
     },
   };
 
