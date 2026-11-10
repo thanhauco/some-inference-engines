@@ -11,3 +11,4 @@ build/
 /results/
 /engines/
 /checkpoints/
+node_modules/

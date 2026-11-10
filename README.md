@@ -16,6 +16,21 @@ with runnable code instead of benchmark screenshots:
 > directly affects throughput, latency, GPU utilization, developer experience, and the
 > economics of your AI application.
 
+## Watch it
+
+Five motion-graphics explainers, generated from code in [`videos/`](videos) with every
+on-screen number read from this repo's simulations.
+
+[![Which inference engine? Overview video](videos/out/overview.gif)](videos/out/overview.mp4)
+
+| [vLLM](videos/out/vllm.mp4) | [SGLang](videos/out/sglang.mp4) | [TensorRT-LLM](videos/out/tensorrt_llm.mp4) | [Ollama](videos/out/ollama.mp4) |
+|---|---|---|---|
+| [![vLLM](videos/out/vllm.png)](videos/out/vllm.mp4) | [![SGLang](videos/out/sglang.png)](videos/out/sglang.mp4) | [![TensorRT-LLM](videos/out/tensorrt_llm.png)](videos/out/tensorrt_llm.mp4) | [![Ollama](videos/out/ollama.png)](videos/out/ollama.mp4) |
+| batching, PagedAttention | programs, RadixAttention, speculation | compile, fusion, quantization | pull, GPU/CPU split, local API |
+
+Click a poster for the MP4, or open [`videos/index.html`](videos/index.html) to play and
+scrub them in the browser. → [how they are made](videos/README.md)
+
 ## The decision framework
 
 | | **Ollama** | **vLLM** | **SGLang** | **TensorRT-LLM** |
@@ -48,7 +63,7 @@ simulation and a fair head-to-head benchmark script.
 
 ```bash
 pip install -e ".[dev]"        # Python 3.10+; only httpx and numpy at runtime
-pytest -q                      # 130+ tests, no GPU needed
+pytest -q                      # 150+ tests, no GPU needed
 
 ie simulate all                # watch each engine's core idea run
 ie recommend --hardware nvidia-datacenter --concurrency 64 --workload agentic
@@ -79,6 +94,18 @@ ENGINE=ollama python examples/migration/app.py   # same app, any engine
 | `quantization` | TensorRT-LLM | INT8/FP8 halve weight bytes at ~3% error; INT4 ~3.9× smaller, group size controls error |
 | `fusion` | TensorRT-LLM | Fused bias+GELU+residual: **4× less HBM traffic**, 96 fewer kernel launches per pass |
 | `memory` | all | Llama-3.1-8B: `q4_K_M` on a 16 GB laptop; 55 × 8k-token sequences on an 80 GB GPU; 70B needs FP8 or 2 GPUs |
+
+### Advanced: after you picked an engine
+
+[docs/advanced.md](docs/advanced.md) covers what decides performance in production.
+
+| Topic | Result |
+|---|---|
+| `interference` | One 32k-token prompt stalls 32 streams for **657 ms**; chunked prefill bounds it to **58 ms**, a separate prefill pool to **17 ms** |
+| `routing` | Across 4 replicas, round-robin keeps **16%** of prefix-cache hits; cache-aware routing keeps **68%** with even load |
+| `parallelism` | 4 GPUs: TP=4 gives **5.2 ms** per token, 4 replicas give **23% more throughput**; over Ethernet TP is slower than no TP |
+| `offload` | Ollama with 19 of 32 layers on the GPU runs at **26%** of full speed: pick a quantization that fits entirely |
+| `capacity` | $ per million tokens, GPUs for a peak load, and the payback period of an engine migration |
 
 ## How each engine works
 
@@ -111,6 +138,7 @@ src/inference_engines/
   concepts/            GPU-free models of what happens inside the engines
     kv_cache.py batching.py radix_cache.py prefix_caching.py speculative.py
     constrained.py quantization.py fusion.py memory.py
+    prefill_decode.py routing.py parallelism.py offload.py capacity.py   (advanced)
   benchmark/           async load generator, metrics (TTFT/TPOT/goodput), reports
 examples/
   ollama/  vllm/  sglang/  tensorrt_llm/   runnable per-engine examples and launch scripts
@@ -118,7 +146,9 @@ examples/
   migration/app.py                         the same app on all four engines
 deploy/
   docker-compose.yml   one profile per engine      k8s/vllm.yaml   production-shaped vLLM
-docs/                  architecture, one page per engine, vLLM vs SGLang,
+videos/                motion-graphics explainers: scenes (JS canvas), player, renderer,
+                       rendered MP4 / GIF / posters in videos/out/
+docs/                  architecture, one page per engine, vLLM vs SGLang, advanced topics,
                        decision framework, migration path, benchmarking
 ```
 
@@ -136,6 +166,7 @@ Override with `IE_<ENGINE>_BASE_URL`, `IE_<ENGINE>_MODEL`, `IE_<ENGINE>_API_KEY`
 
 ## Further reading
 
+* [Advanced topics](docs/advanced.md) - chunked prefill, routing, parallelism, offload, cost
 * [Benchmarking engines properly](docs/benchmarking.md) - TTFT, TPOT, goodput, sweeps
 * [Decision framework](docs/decision-framework.md) - five questions and the scoring model
 * Kwon et al., *Efficient Memory Management for LLM Serving with PagedAttention* (2023)

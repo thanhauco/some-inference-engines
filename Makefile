@@ -1,4 +1,4 @@
-.PHONY: install test lint format simulate up-ollama up-vllm up-sglang up-trtllm down
+.PHONY: install test lint format simulate videos up-ollama up-vllm up-sglang up-trtllm down
 
 install:
 	pip install -e ".[dev]"
@@ -7,15 +7,20 @@ test:
 	pytest -q
 
 lint:
-	ruff check src tests examples
-	ruff format --check src tests examples
+	ruff check src tests examples videos
+	ruff format --check src tests examples videos
 
 format:
-	ruff check --fix src tests examples
-	ruff format src tests examples
+	ruff check --fix src tests examples videos
+	ruff format src tests examples videos
 
 simulate:
 	ie simulate all
+
+# Needs node + playwright (npm i playwright) and ffmpeg.
+videos:
+	python videos/export_data.py
+	node videos/render.js
 
 up-ollama:
 	docker compose -f deploy/docker-compose.yml --profile ollama up -d

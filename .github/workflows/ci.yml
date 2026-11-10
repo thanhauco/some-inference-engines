@@ -16,6 +16,8 @@ jobs:
         with:
           python-version: ${{ matrix.python-version }}
       - run: pip install -e ".[dev]"
-      - run: ruff check src tests examples
+      - run: ruff check src tests examples videos
       - run: pytest -q
       - run: ie simulate all
+      - name: Video scenes parse
+        run: for f in videos/src/*.js videos/render.js; do node --check "$f"; done
